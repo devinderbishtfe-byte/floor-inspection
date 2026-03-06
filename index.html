@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Floor Inspection Bot</title>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f3f4f6;
+margin:0;
+padding:0;
+}
+
+header{
+background:#2563eb;
+color:white;
+padding:15px;
+text-align:center;
+font-size:20px;
+font-weight:bold;
+}
+
+#chat{
+padding:20px;
+max-width:700px;
+margin:auto;
+}
+
+.bot{
+background:white;
+padding:10px 15px;
+border-radius:10px;
+margin:10px 0;
+display:inline-block;
+}
+
+.user{
+background:#2563eb;
+color:white;
+padding:10px 15px;
+border-radius:10px;
+margin:10px 0;
+display:inline-block;
+float:right;
+}
+
+.buttons{
+margin:10px 0;
+}
+
+button{
+padding:10px 15px;
+margin:5px;
+border:none;
+border-radius:6px;
+cursor:pointer;
+background:#2563eb;
+color:white;
+}
+
+input{
+padding:10px;
+width:90%;
+margin-top:10px;
+}
+
+.summary{
+background:white;
+padding:15px;
+border-radius:10px;
+margin-top:20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+🏢 Housekeeping Inspection Bot
+</header>
+
+<div id="chat"></div>
+
+<script>
+
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbyVsJeyD91kQXbCJ5losFDVT7AMwXNulC-40XjbothzPiLf5ynnH5gQqSzyqfnXZSGj/exec";
+const MANAGER_PHONE = "918938001404";
+
+const chat = document.getElementById("chat");
+
+let data = {
+supervisor:"",
+shift:"",
+floor:"",
+ratings:{},
+issues:[],
+note:""
+};
+
+function bot(msg){
+
+const div=document.createElement("div");
+div.className="bot";
+div.innerHTML=msg;
+chat.appendChild(div);
+
+window.scrollTo(0,document.body.scrollHeight);
+
+}
+
+function user(msg){
+
+const div=document.createElement("div");
+div.className="user";
+div.innerHTML=msg;
+chat.appendChild(div);
+
+window.scrollTo(0,document.body.scrollHeight);
+
+}
+
+function askInput(question,callback){
+
+bot(question);
+
+const input=document.createElement("input");
+input.placeholder="Type here...";
+
+input.onkeypress=function(e){
+
+if(e.key==="Enter"){
+
+callback(input.value);
+input.remove();
+
+}
+
+};
+
+chat.appendChild(input);
+input.focus();
+
+}
+
+function askButtons(question,options,callback){
+
+bot(question);
+
+const div=document.createElement("div");
+div.className="buttons";
+
+options.forEach(o=>{
+
+const btn=document.createElement("button");
+btn.innerText=o;
+
+btn.onclick=function(){
+
+callback(o);
+div.remove();
+
+};
+
+div.appendChild(btn);
+
+});
+
+chat.appendChild(div);
+
+}
+
+function askRating(area,next){
+
+askButtons("Rate "+area+" (1-5)",["1","2","3","4","5"],val=>{
+
+data.ratings[area]=parseInt(val);
+
+user(area+" Rating: "+val);
+
+next();
+
+});
+
+}
+
+function start(){
+
+bot("Hello 👋 Let's start inspection");
+
+askInput("Supervisor Name?",name=>{
+
+data.supervisor=name;
+user(name);
+
+askButtons("Select Shift",["Morning","Evening","Night"],shift=>{
+
+data.shift=shift;
+user(shift);
+
+askInput("Which Floor?",floor=>{
+
+data.floor=floor;
+user(floor);
+
+ratingStep();
+
+});
+
+});
+
+});
+
+}
+
+function ratingStep(){
+
+askRating("Washroom",()=>{
+
+askRating("Floor Area",()=>{
+
+askRating("Dustbin",()=>{
+
+askRating("Kitchen",()=>{
+
+askRating("Cabin",()=>{
+
+askRating("Meeting Room",issuesStep);
+
+});
+
+});
+
+});
+
+});
+
+});
+
+}
+
+function issuesStep(){
+
+bot("Any issues?");
+
+askButtons("Select issue (optional)",[
+"Bad Smell",
+"Dirty Floor",
+"Dustbin Full",
+"Water Leakage",
+"No Issue"
+],issue=>{
+
+if(issue!=="No Issue"){
+data.issues.push(issue);
+}
+
+user(issue);
+
+noteStep();
+
+});
+
+}
+
+function noteStep(){
+
+askInput("Any note? (optional)",note=>{
+
+data.note=note;
+user(note);
+
+summary();
+
+});
+
+}
+
+function avgScore(){
+
+let sum=0;
+let count=0;
+
+for(let k in data.ratings){
+
+sum+=data.ratings[k];
+count++;
+
+}
+
+return (sum/count).toFixed(1);
+
+}
+
+function summary(){
+
+const score=avgScore();
+
+const div=document.createElement("div");
+div.className="summary";
+
+div.innerHTML=`
+
+<h3>Inspection Summary</h3>
+
+Supervisor: ${data.supervisor}<br>
+Shift: ${data.shift}<br>
+Floor: ${data.floor}<br>
+Score: ${score}/5<br>
+Issues: ${data.issues.join(", ") || "None"}<br>
+Note: ${data.note || "-"}
+
+<br><br>
+
+<button onclick="saveSheet()">📊 Save to Sheet</button>
+<button onclick="sendWhatsApp()">📲 Send WhatsApp</button>
+
+`;
+
+chat.appendChild(div);
+
+}
+
+function saveSheet(){
+
+fetch(SHEET_URL,{
+method:"POST",
+body:JSON.stringify(data)
+})
+.then(res=>alert("Saved to Google Sheet"))
+.catch(()=>alert("Error"));
+
+}
+
+function sendWhatsApp(){
+
+const score=avgScore();
+
+const msg=`
+Floor Inspection Report
+
+Supervisor: ${data.supervisor}
+Shift: ${data.shift}
+Floor: ${data.floor}
+
+Score: ${score}/5
+
+Issues: ${data.issues.join(", ") || "None"}
+
+Note: ${data.note}
+`;
+
+const url="https://wa.me/"+MANAGER_PHONE+"?text="+encodeURIComponent(msg);
+
+window.open(url);
+
+}
+
+start();
+
+</script>
+
+</body>
+</html>
